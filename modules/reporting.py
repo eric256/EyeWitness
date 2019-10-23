@@ -1,11 +1,12 @@
 import os
 import sys
+import urllib.parse
 
 try:
     from fuzzywuzzy import fuzz
 except ImportError:
-    print '[*] fuzzywuzzy not found.'
-    print '[*] Please run the script in the setup directory!'
+    print('[*] fuzzywuzzy not found.')
+    print('[*] Please run the script in the setup directory!')
     sys.exit()
 
 
@@ -30,8 +31,7 @@ def process_group(
         String: HTML representing ToC Table
         String: HTML representing current report page
     """
-    group_data = sorted([x for x in data if x.category == group],
-                        key=lambda (k): k.page_title)
+    group_data = sorted([x for x in data if x.category == group], key=lambda k: str(k.page_title))
 
     grouped_elements = []
     if len(group_data) == 0:
@@ -51,7 +51,7 @@ def process_group(
         temp = [x for x in group_data if fuzz.token_sort_ratio(
             test_element.page_title, x.page_title) >= 70]
         temp.append(test_element)
-        temp = sorted(temp, key=lambda (k): k.page_title)
+        temp = sorted(temp, key=lambda k: k.page_title)
         grouped_elements.extend(temp)
         group_data = [x for x in group_data if fuzz.token_sort_ratio(
             test_element.page_title, x.page_title) < 70]
@@ -181,12 +181,42 @@ def sort_data_and_write(cli_parsed, data):
     web_index_head = create_web_index_head(cli_parsed.date, cli_parsed.time)
     table_head = create_table_head()
     counter = 1
+    csv_request_data = "Protocol,Port,Domain,Request Status,Screenshot Path, Source Path"
+
+    # Generate and write json log of requests
+    for json_request in data:
+        url = urllib.parse.urlparse(json_request._remote_system)
+
+        # Determine protocol
+        csv_request_data += "\n" + url.scheme + ","
+        if url.port is not None:
+            csv_request_data += str(url.port) + ","
+        elif url.scheme == 'http':
+            csv_request_data += "80,"
+        elif url.scheme == 'https':
+            csv_request_data += "443,"
+        try:
+            csv_request_data += url.hostname + ","
+        except TypeError:
+            print("Error when accessing a target's hostname (it's not existent)")
+            print("Possible bad url (improperly formatted) in the URL list.")
+            print("Fix your list and re-try. Killing EyeWitness....")
+            sys.exit(1)
+        if json_request._error_state == None:
+            csv_request_data += "Successful,"
+        else:
+            csv_request_data += json_request._error_state + ","
+        csv_request_data += json_request._screenshot_path + ","
+        csv_request_data += json_request._source_path
+
+    with open(os.path.join(cli_parsed.d, 'Requests.csv'), 'a') as f:
+        f.write(csv_request_data)
 
     # Pre-filter error entries
     errors = sorted([x for x in data if x.error_state is not None],
-                    key=lambda (k): (k.error_state, k.page_title))
+                    key=lambda k: (k.error_state, k.page_title))
     data[:] = [x for x in data if x.error_state is None]
-    data = sorted(data, key=lambda (k): k.page_title)
+    data = sorted(data, key=lambda k: str(k.page_title))
     html = u""
     # Loop over our categories and populate HTML
     for cat in categories:
@@ -198,7 +228,7 @@ def sort_data_and_write(cli_parsed, data):
         for obj in grouped:
             pcount += 1
             html += obj.create_table_html()
-            if counter % cli_parsed.results == 0:
+            if (counter % cli_parsed.results == 0) or (counter == (total_results) -1):
                 html = (web_index_head + "EW_REPLACEME" + html +
                         "</table><br>")
                 pages.append(html)
@@ -215,7 +245,7 @@ def sort_data_and_write(cli_parsed, data):
         html += table_head
         for obj in errors:
             html += obj.create_table_html()
-            if counter % cli_parsed.results == 0:
+            if (counter % cli_parsed.results == 0) or (counter == (total_results)):
                 html = (web_index_head + "EW_REPLACEME" + html +
                         "</table><br>")
                 pages.append(html)
@@ -229,7 +259,7 @@ def sort_data_and_write(cli_parsed, data):
     toc_table += "<tr><th>Total</th><td>{0}</td></tr>".format(total_results)
     toc_table += "</table>"
 
-    if html != u"":
+    if (html != u"") and (counter - total_results != 0):
         html = (web_index_head + "EW_REPLACEME" + html +
                 "</table><br>")
         pages.append(html)
@@ -245,19 +275,28 @@ def sort_data_and_write(cli_parsed, data):
         num_pages = len(pages) + 1
         bottom_text = "\n<center><br>"
         bottom_text += ("<a href=\"report.html\"> Page 1</a>")
+        skip_last_dummy = False
         # Generate our header/footer data here
         for i in range(2, num_pages):
-            bottom_text += ("<a href=\"report_page{0}.html\"> Page {0}</a>").format(
-                str(i))
+            badd_page = "</center>EW_REPLACEME<table border=\"1\">\n        <tr>\n        <th>Web Request Info</th>\n        <th>Web Screenshot</th>\n        </tr></table><br>"
+            if badd_page in pages[i-1]:
+                skip_last_dummy = True
+                pass
+            else:
+                bottom_text += ("<a href=\"report_page{0}.html\"> Page {0}</a>").format(str(i))
         bottom_text += "</center>\n"
         top_text = bottom_text
         # Generate our next/previous page buttons
-        for i in range(0, len(pages)):
+        if skip_last_dummy:
+            amount = len(pages) - 1
+        else:
+            amount = len(pages)
+        for i in range(0, amount):
             headfoot = "<center>"
             if i == 0:
                 headfoot += ("<a href=\"report_page2.html\"> Next Page "
                              "</a></center>")
-            elif i == len(pages) - 1:
+            elif i == amount - 1:
                 if i == 1:
                     headfoot += ("<a href=\"report.html\"> Previous Page "
                                  "</a></center>")
@@ -283,9 +322,15 @@ def sort_data_and_write(cli_parsed, data):
         with open(os.path.join(cli_parsed.d, 'report.html'), 'a') as f:
             f.write(toc)
             f.write(pages[0])
-        for i in range(2, len(pages) + 1):
-            with open(os.path.join(cli_parsed.d, 'report_page{0}.html'.format(str(i))), 'w') as f:
-                f.write(pages[i - 1])
+        write_out = len(pages)
+        for i in range(2, write_out + 1):
+            bad_page = "<table border=\"1\">\n        <tr>\n        <th>Web Request Info</th>\n        <th>Web Screenshot</th>\n        </tr></table><br>\n<center><br><a "
+            badd_page2 = "</center>EW_REPLACEME<table border=\"1\">\n        <tr>\n        <th>Web Request Info</th>\n        <th>Web Screenshot</th>\n        </tr></table><br>"
+            if (bad_page in pages[i-1]) or (badd_page2 in pages[i-1]):
+                pass
+            else:
+                with open(os.path.join(cli_parsed.d, 'report_page{0}.html'.format(str(i))), 'w') as f:
+                    f.write(pages[i - 1])
 
 
 def create_web_index_head(date, time):
@@ -387,7 +432,7 @@ def search_report(cli_parsed, data, search_term):
     counter = 1
 
     data[:] = [x for x in data if x.error_state is None]
-    data = sorted(data, key=lambda (k): k.page_title)
+    data = sorted(data, key=lambda k: k.page_title)
     html = u""
 
     # Add our errors here (at the very very end)
@@ -450,7 +495,13 @@ def search_report(cli_parsed, data, search_term):
         if len(pages) == 0:
             return
         with open(os.path.join(cli_parsed.d, 'search.html'), 'a') as f:
-            f.write(pages[0])
+            try:
+                f.write(pages[0])
+            except UnicodeEncodeError:
+                f.write(pages[0].encode('utf-8'))
         for i in range(2, len(pages) + 1):
             with open(os.path.join(cli_parsed.d, 'search_page{0}.html'.format(str(i))), 'w') as f:
-                f.write(pages[i - 1])
+                try:
+                    f.write(pages[i - 1])
+                except UnicodeEncodeError:
+                    f.write(pages[i - 1].encode('utf-8'))

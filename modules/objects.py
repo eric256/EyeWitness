@@ -1,8 +1,8 @@
-import cgi
+import html
 import os
 import re
 
-from helpers import strip_nonalphanum
+from modules.helpers import strip_nonalphanum
 
 
 class HTTPTableObject(object):
@@ -20,7 +20,6 @@ class HTTPTableObject(object):
         self._source_path = None
         self._error_state = None
         self._blank = False
-        self._active_scan = False
         self._uadata = []
         self._source_code = None
         self._max_difference = None
@@ -131,7 +130,11 @@ class HTTPTableObject(object):
 
     @property
     def headers(self):
-        return self._headers
+        if hasattr(self, '_headers'):
+            return self._headers
+        else:
+            missing = { "Missing Headers" : "No Headers found" }
+            return missing
 
     @headers.setter
     def headers(self, headers):
@@ -224,8 +227,12 @@ class HTTPTableObject(object):
                 self.remote_system)
 
         if self.default_creds is not None:
-            html += "<br><b>Default credentials:</b> {0}<br>".format(
-                self.sanitize(self.default_creds))
+            try:
+                html += "<br><b>Default credentials:</b> {0}<br>".format(
+                    self.sanitize(self.default_creds))
+            except UnicodeEncodeError:
+                html += u"<br><b>Default credentials:</b> {0}<br>".format(
+                    self.sanitize(self.default_creds))
 
         if self.error_state is None:
             try:
@@ -234,11 +241,17 @@ class HTTPTableObject(object):
             except UnicodeDecodeError:
                 html += "\n<br><b> Page Title:</b>{0}\n".format(
                     'Unable to Display')
+            except UnicodeEncodeError:
+                html += u"\n<br><b> Page Title:</b>{0}\n".format(
+                    self.sanitize(self.page_title))
 
             for key, value in self.headers.items():
-                html += '<br><b> {0}:</b> {1}\n'.format(
-                    self.sanitize(key), self.sanitize(value))
-
+                try:
+                    html += '<br><b> {0}:</b> {1}\n'.format(
+                        self.sanitize(key), self.sanitize(value))
+                except UnicodeEncodeError:
+                    html += u'<br><b> {0}:</b> {1}\n'.format(
+                        self.sanitize(key), self.sanitize(value))
         if self.blank:
             html += ("""<br></td>
             <td><div style=\"display: inline-block; width: 850px;\">Page Blank\
@@ -282,8 +295,12 @@ class HTTPTableObject(object):
         </div>""")
         return html
 
-    def sanitize(self, html):
-        return cgi.escape(html.decode('utf-8', errors='replace'), quote=True)
+    def sanitize(self, incoming_html):
+        if type(incoming_html) == bytes:
+            pass
+        else:
+            incoming_html = incoming_html.encode()
+        return html.escape(incoming_html.decode(), quote=True)
 
     def add_ua_data(self, uaobject):
         difference = abs(len(self.source_code) - len(uaobject.source_code))
@@ -381,19 +398,30 @@ class UAObject(HTTPTableObject):
                 self.remote_system)
 
         if self.default_creds is not None:
-            html += "<br><b>Default credentials:</b> {0}<br>".format(
-                self.sanitize(self.default_creds))
-
+            try:
+                html += "<br><b>Default credentials:</b> {0}<br>".format(
+                    self.sanitize(self.default_creds))
+            except UnicodeEncodeError:
+                html += u"<br><b>Default credentials:</b> {0}<br>".format(
+		    self.sanitize(self.default_creds))
+                
         try:
             html += "\n<br><b> Page Title: </b>{0}\n".format(
                 self.sanitize(self.page_title))
         except UnicodeDecodeError:
             html += "\n<br><b> Page Title:</b>{0}\n".format(
                 'Unable to Display')
+        except UnicodeEncodeError:
+                html += u'<br><b> Page Title: </b>{0}\n'.format(
+                    self.sanitize(self.page_title))
 
         for key, value in self.headers.items():
-            html += '<br><b> {0}:</b> {1}\n'.format(
-                self.sanitize(key), self.sanitize(value))
+            try: 
+                html += '<br><b> {0}:</b> {1}\n'.format(
+                    self.sanitize(key), self.sanitize(value))
+            except UnicodeEncodeError:
+                html += u'<br><b> {0}:</b> {1}\n'.format(
+                    self.sanitize(key), self.sanitize(value))
 
         if self.blank:
             html += ("""<br></td>

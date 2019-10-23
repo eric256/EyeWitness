@@ -1,16 +1,15 @@
 EyeWitness
 ======
 
-EyeWitness is designed to take screenshots of websites, RDP services, and open VNC servers, provide some server header info, and identify default credentials if possible.
+EyeWitness is designed to take screenshots of websites provide some server header info, and identify default credentials if known.
 
-EyeWitness is designed to run on Kali Linux. It will auto detect the file you give it with the -f flag as either being a text file with URLs on each new line, nmap xml output, or nessus xml output.  The -t (timeout) flag is completely optional, and lets you provide the max time to wait when trying to render and screenshot a web page.
+EyeWitness is designed to run on Kali Linux. It will auto detect the file you give it with the -f flag as either being a text file with URLs on each new line, nmap xml output, or nessus xml output. The --timeout flag is completely optional, and lets you provide the max time to wait when trying to render and screenshot a web page.
 
 A complete usage guide which documents EyeWitness features and its typical use cases is available here - https://www.christophertruncer.com/eyewitness-usage-guide/
 
 ###### Supported Linux Distros:
 * Kali Linux
 * Debian 7+ (at least stable, looking into testing) (Thanks to @themightyshiv)
-
 
 **E-Mail:** EyeWitness [@] christophertruncer [dot] com
 
@@ -20,16 +19,14 @@ A complete usage guide which documents EyeWitness features and its typical use c
 
 ### Usage:
 ```bash
-./EyeWitness.py -f filename -t optionaltimeout --open (Optional)
+./EyeWitness.py -f filename --timeout optionaltimeout --open (Optional)
 ```
 
 ### Examples:
 ```bash
 ./EyeWitness -f urls.txt --web
 
-./EyeWitness -x urls.xml -t 8 --headless
-
-./EyeWitness -f rdp.txt --rdp
+./EyeWitness -x urls.xml --timeout 8 --headless
 ```
 
 ### Docker
@@ -58,21 +55,8 @@ docker run \
     -it \
     -v ~/EyeWitness:/tmp/EyeWitness \
     eyewitness \
+    --web \
     --single http://www.google.com
-    --headless
-```
-
-##### Example #2 - vnc capturing
-```bash
-docker run \
-    --rm \
-    -it \
-    -e DISPLAY=$DISPLAY \
-    -v /tmp/.X11-unix:/tmp/.X11-unix \
-    -v ~/EyeWitness:/tmp/EyeWitness \
-    eyewitness \
-    -f /tmp/EyeWitness/urls.txt
-    --vnc
 ```
 
 ###### Call to Action:
